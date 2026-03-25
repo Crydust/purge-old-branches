@@ -1,14 +1,20 @@
 # Purge old branches
 
-We develop our software in multiple separate git repositories.
-In all of them we create branches for bug fixes and new features.
-These get names like `BUG-12345-foo` and `FEATURE-12345-bar`.
-We want to delete old branches.
-We have a main-ish branch we call `RELEASE-12345`.
-There will be two versions of this program: one that deletes local branches and one that deletes remote branches.
+A tool to automate the cleanup of stale Git branches across multiple repositories based on Jira ticket status and branch age.
 
-The definition of an old branch is:
-* The ticket status is `Done` (we read this from a csv file with the ticket number and the status)
-* The `HEAD` commit of the branch is older than 90 days (in every repository)
-* The branch is merged into `RELEASE-12345` (in every repository)
-* The branch name matches the pattern `BUG-12345` or `FEATURE-12345`
+## Logic for Deletion
+A branch is considered "stale" and eligible for deletion if **all** the following are true:
+1. **Ticket Status:** The ticket ID extracted from the branch name has a status of `Done` in the provided CSV file.
+2. **Age:** The `HEAD` commit of the branch is older than 90 days.
+3. **Merged:** The branch has been merged into the "target" branch (e.g., `main` or `RELEASE-12345`).
+4. **Naming Convention:** The branch name starts with a configurable prefix (e.g., `BUG-`, `FEATURE-`).
+
+## Architecture
+The application is split into testable modules:
+- `csv_parser`: Extracts ticket data.
+- `git_wrapper`: Interfaces with Git to list branches, check merge status, and get commit dates.
+- `cleaner_logic`: Orchestrates the decision-making process.
+- `cli`: Handles user configuration (local vs remote, branch prefixes, target branch name).
+
+## Development Flow
+This project follows a test-driven approach. For every feature implemented, corresponding tests must be added to the `tests/` directory and pass before integration.

@@ -1,0 +1,11 @@
+[project]
+name = "purge-old-branches"
+version = "0.0.1"
+description = "A project to purge old branches"
+dependencies = [
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

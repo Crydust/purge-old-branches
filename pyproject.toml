@@ -2,7 +2,13 @@
 name = "purge-old-branches"
 version = "0.0.1"
 description = "A project to purge old branches"
-dependencies = [
+dependencies = []
+
+[project.scripts]
+purge-old-branches = "src.cli:main"
+
+[project.optional-dependencies]
+dev = [
     "pytest",
 ]
 

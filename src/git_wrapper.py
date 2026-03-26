@@ -1,9 +1,17 @@
 """Git wrapper for interfacing with Git operations."""
 
 import subprocess
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
+
+
+@dataclass(frozen=True)
+class BranchInfo:
+    refname: str
+    authordate: datetime
+    committerdate: datetime
 
 
 class GitWrapper:
@@ -51,8 +59,8 @@ class GitWrapper:
         return result.stdout.strip()
 
     def get_merged_branches(
-        self, target_branch: str, is_remote: bool = False
-    ) -> List[str]:
+            self, target_branch: str, is_remote: bool = False
+    ) -> List[BranchInfo]:
         """
         Get a list of branches merged into the target branch.
 
@@ -63,95 +71,70 @@ class GitWrapper:
         Returns:
             A list of branch names merged into the target branch.
         """
-        if is_remote:
-            # For remote branches, use origin/target_branch
-            merge_base_branch = f"origin/{target_branch}"
-        else:
-            merge_base_branch = target_branch
 
         try:
-            output = self._run_git(["branch", "--merged", merge_base_branch])
+            args = ["branch", "--list", "--no-color",
+                    '--format=%(refname), %(authordate:iso8601-strict), %(committerdate:iso8601-strict)']
+            if is_remote:
+                args.extend(["--remotes", "--merged", f"origin/{target_branch}"])
+            else:
+                args.extend(["--merged", target_branch])
+            output = self._run_git(args)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Failed to get merged branches for '{merge_base_branch}': {e.stderr}"
+                f"Failed to get merged branches for '{target_branch}': {e.stderr}"
             )
 
-        # Parse branch names, removing leading asterisk and whitespace
-        branches = [line.strip().lstrip("*") for line in output.split("\n") if line.strip()]
-
-        # Filter out the target branch itself
-        branches = [b for b in branches if b != target_branch and b != merge_base_branch]
+        branches = []
+        for line in output.splitlines():
+            a, b, c = line.split(", ")
+            if is_remote and a.startswith("refs/remotes/"):
+                refname = a[len("refs/remotes/"):]
+            elif not is_remote and a.startswith("refs/heads/"):
+                refname = a[len("refs/heads/"):]
+            else:
+                print(f"Unexpected refname format: {a}, skipping")
+                continue
+            authordate = _datetime_at_utc(datetime.fromisoformat(b))
+            committerdate = _datetime_at_utc(datetime.fromisoformat(c))
+            if refname == target_branch or refname == f"origin/{target_branch}":
+                continue
+            branches.append(BranchInfo(refname, authordate, committerdate))
 
         return branches
 
-    def get_branch_commit_date(self, branch_name: str, is_remote: bool = False) -> datetime:
-        """
-        Get the commit date of the HEAD commit of a branch in GMT/UTC.
 
-        Args:
-            branch_name: Name of the branch (without 'origin/' prefix for remote branches).
-            is_remote: If True, treat as a remote branch.
+def _datetime_at_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc)
+    else:
+        return dt.replace(tzinfo=timezone.utc)
 
-        Returns:
-            A datetime object in UTC representing the commit date.
 
-        Raises:
-            RuntimeError: If the branch doesn't exist or the command fails.
-        """
-        if is_remote:
-            full_branch_name = f"origin/{branch_name}"
-        else:
-            full_branch_name = branch_name
+def delete_branch(self, branch_name: str, is_remote: bool = False) -> None:
+    """
+    Delete a branch.
 
+    Args:
+        branch_name: Name of the branch to delete.
+        is_remote: If True, delete remote branch; if False, delete local branch.
+
+    Raises:
+        RuntimeError: If the deletion fails.
+    """
+    if is_remote:
+        # Use git push origin --delete for remote branches
         try:
-            # Get the committer date in ISO format (most recent date if multiple)
-            output = self._run_git(
-                ["log", "-1", "--format=%cI", full_branch_name]
-            )
+            self._run_git(["push", "origin", "--delete", branch_name])
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Failed to get commit date for branch '{full_branch_name}': {e.stderr}"
+                f"Failed to delete remote branch '{branch_name}': {e.stderr}"
             )
-
-        if not output:
-            raise RuntimeError(f"Branch '{full_branch_name}' has no commits")
-
-        # Parse ISO 8601 format timestamp
-        commit_date = datetime.fromisoformat(output)
-
-        # Convert to UTC if it has timezone info
-        if commit_date.tzinfo is not None:
-            commit_date = commit_date.astimezone(timezone.utc)
-        else:
-            commit_date = commit_date.replace(tzinfo=timezone.utc)
-
-        return commit_date
-
-    def delete_branch(self, branch_name: str, is_remote: bool = False) -> None:
-        """
-        Delete a branch.
-
-        Args:
-            branch_name: Name of the branch to delete.
-            is_remote: If True, delete remote branch; if False, delete local branch.
-
-        Raises:
-            RuntimeError: If the deletion fails.
-        """
-        if is_remote:
-            # Use git push origin --delete for remote branches
-            try:
-                self._run_git(["push", "origin", "--delete", branch_name])
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(
-                    f"Failed to delete remote branch '{branch_name}': {e.stderr}"
-                )
-        else:
-            # Use git branch -d for local branches
-            try:
-                self._run_git(["branch", "-d", branch_name])
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(
-                    f"Failed to delete local branch '{branch_name}': {e.stderr}"
-                )
-
+    else:
+        # Use git branch -d for local branches
+        try:
+            self._run_git(["branch", "-d", branch_name])
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f"Failed to delete local branch '{branch_name}': {e.stderr}"
+            )

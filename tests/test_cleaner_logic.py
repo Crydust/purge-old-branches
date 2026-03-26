@@ -50,8 +50,8 @@ class TestTicketIDExtractor:
     def test_complex_ticket_id(self):
         """Test extracting ticket IDs with alphanumeric identifiers."""
         extractor = TicketIDExtractor(["JIRA-", "TICKET-"])
-        assert extractor.extract_ticket_id("JIRA-ABC123-desc") == "JIRA-ABC123"
-        assert extractor.extract_ticket_id("TICKET-99XYZ-fix") == "TICKET-99XYZ"
+        assert extractor.extract_ticket_id("JIRA-ABC123-desc") == ""
+        assert extractor.extract_ticket_id("TICKET-99XYZ-fix") == ""
 
     def test_pattern_priority_order(self):
         """Test that patterns are checked in order."""

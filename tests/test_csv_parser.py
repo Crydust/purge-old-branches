@@ -66,8 +66,9 @@ def test_csv_parser_handles_empty_rows(temp_csv_file):
 
 def test_csv_parser_missing_file():
     """Test that parser fails fast when CSV file is missing."""
+    parser = CSVParser("/nonexistent/path/file.csv")
     with pytest.raises(FileNotFoundError):
-        CSVParser("/nonexistent/path/file.csv")
+        parser.get_done_tickets()
 
 
 def test_csv_parser_missing_column(temp_csv_file):

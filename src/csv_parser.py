@@ -9,10 +9,10 @@ class CSVParser:
     """Parse CSV files with configurable header names to extract ticket statuses."""
 
     def __init__(
-        self,
-        csv_path: str,
-        ticket_id_col: str = "ticket_id",
-        status_col: str = "status",
+            self,
+            csv_path: str,
+            ticket_id_col: str = "ticket_id",
+            status_col: str = "status",
     ):
         """
         Initialize the CSV parser.
@@ -21,16 +21,10 @@ class CSVParser:
             csv_path: Path to the CSV file.
             ticket_id_col: Name of the column containing ticket IDs.
             status_col: Name of the column containing ticket status.
-
-        Raises:
-            FileNotFoundError: If the CSV file does not exist.
         """
         self.csv_path = Path(csv_path)
         self.ticket_id_col = ticket_id_col
         self.status_col = status_col
-
-        if not self.csv_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
 
     def get_done_tickets(self) -> Set[str]:
         """
@@ -41,7 +35,12 @@ class CSVParser:
 
         Raises:
             ValueError: If headers are missing or malformed.
+            FileNotFoundError: If the CSV file does not exist.
         """
+
+        if not self.csv_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
+
         done_tickets: Set[str] = set()
 
         with open(self.csv_path, "r", encoding="utf-8") as f:
@@ -74,4 +73,3 @@ class CSVParser:
                     done_tickets.add(ticket_id)
 
         return done_tickets
-

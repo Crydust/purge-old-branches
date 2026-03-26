@@ -15,6 +15,7 @@ The application is split into testable modules:
 - `git_wrapper`: Interfaces with Git to list branches, check merge status, and get commit dates.
 - `cleaner_logic`: Orchestrates the decision-making process.
 - `cli`: Handles user configuration (local vs remote, branch prefixes, target branch name).
+- To run the application and see the usage message: `python -m src.cli --help`
 
 ## Development Flow
 This project follows a test-driven approach. For every feature implemented, corresponding tests must be added to the `tests/` directory and pass before integration.

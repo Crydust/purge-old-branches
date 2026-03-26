@@ -1,7 +1,8 @@
 """Core logic for determining which branches should be purged."""
 
 import re
-from datetime import datetime, timedelta, timezone
+from re import RegexFlag
+from datetime import datetime, timezone
 from typing import List, Set
 
 
@@ -31,21 +32,18 @@ class TicketIDExtractor:
         Returns:
             The extracted ticket ID (prefix + identifier), or empty string if no match.
         """
-        # Strip 'origin/' prefix if present
-        clean_name = branch_name.lstrip("origin/")
 
         for pattern in self.patterns:
-            compare_pattern = pattern if self.case_sensitive else pattern.lower()
-            compare_name = clean_name if self.case_sensitive else clean_name.lower()
 
-            if compare_name.startswith(compare_pattern):
-                # Extract the full ticket ID (everything up to the first dash after the pattern)
-                # For example, from "FEATURE-123-description", extract "FEATURE-123"
-                remainder = clean_name[len(pattern) :]
-                match = re.match(r"^([A-Za-z0-9]+)", remainder)
-                if match:
-                    ticket_id = pattern + match.group(1)
-                    return ticket_id
+            # Strip 'origin/' prefix if present.
+            # Extract the full ticket ID (all digits after the pattern).
+            # We expect a dash or at least a word boundary after the last digit.
+            # For example, from "FEATURE-123-description", extract "FEATURE-123"
+            if match := re.fullmatch(
+                    r"(?:origin/)?(" + re.escape(pattern) + r"\d{1,10})\b.*",
+                    branch_name,
+                    RegexFlag.NOFLAG if self.case_sensitive else RegexFlag.IGNORECASE):
+                return match.group(1)
 
         return ""
 
@@ -54,12 +52,12 @@ class PurgeManager:
     """Orchestrate the decision-making process for branch deletion."""
 
     def __init__(
-        self,
-        git_wrapper,
-        csv_parser,
-        patterns: List[str],
-        target_branch: str = "main",
-        age_threshold_days: int = 90,
+            self,
+            git_wrapper,
+            csv_parser,
+            patterns: List[str],
+            target_branch: str = "main",
+            age_threshold_days: int = 90,
     ):
         """
         Initialize the purge manager.
@@ -131,4 +129,3 @@ class PurgeManager:
             branches_to_delete.append(branch)
 
         return branches_to_delete
-

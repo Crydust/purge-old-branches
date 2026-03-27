@@ -25,9 +25,10 @@ This project follows a test-driven approach. For every feature implemented, corr
 - To run the application and see the usage message: `python -m purge_old_branches.cli --help`
 - Or after installation: `purge-old-branches --help`
 - To install for development: `pip install -e ".[dev]"`
-- To run linting and tests: 
+- To run linting, type checking, and tests: 
 ```shell
 python -m ruff check
+python -m pyright
 python -m pytest
-python -m build --wheel
+python -m build
 ```

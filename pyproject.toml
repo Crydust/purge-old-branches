@@ -12,10 +12,10 @@ purge-old-branches = "purge_old_branches.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest==9.0.2",
-    "pytest-cov==7.0.0",
-    "ruff==0.15.7",
-    "build==1.4.0",
-    "pyright==1.1.404",
+    "pytest-cov==7.1.0",
+    "ruff==0.15.8",
+    "build==1.4.2",
+    "pyright==1.1.408",
 ]
 
 [build-system]

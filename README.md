@@ -32,3 +32,5 @@ python -m pyright
 python -m pytest
 python -m build
 ```
+
+Build creates a `.whl` file in `dist/`. Other developers can install it with `python -m pip install dist/purge_old_branches-0.0.1-py3-none-any.whl` and then run `purge-old-branches --help`.

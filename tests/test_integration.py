@@ -1,6 +1,7 @@
 """Integration tests for the full purge-old-branches workflow."""
 
 import csv
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,7 +91,7 @@ def test_integration_full_workflow(temp_git_repo_with_branches, temp_csv_with_ti
         cwd=repo_path,
         check=True,
         capture_output=True,
-        env={**dict(subprocess.os.environ), **env},
+        env=os.environ | env,
     )
 
     # Merge back to main
@@ -149,7 +150,7 @@ def test_integration_full_workflow(temp_git_repo_with_branches, temp_csv_with_ti
         cwd=repo_path,
         check=True,
         capture_output=True,
-        env={**dict(subprocess.os.environ), **env},
+        env=os.environ | env,
     )
 
     # Verify initial state - all branches exist

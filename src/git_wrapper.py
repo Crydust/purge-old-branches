@@ -108,13 +108,7 @@ class GitWrapper:
         branches = []
         for line in output.splitlines():
             a, b, c = line.split(" ?sep? ", maxsplit=2)
-            if is_remote and a.startswith("refs/remotes/"):
-                refname = a[len("refs/remotes/") :]
-            elif not is_remote and a.startswith("refs/heads/"):
-                refname = a[len("refs/heads/") :]
-            else:
-                print(f"Unexpected refname format: {a}, skipping")
-                continue
+            refname = a.removeprefix("refs/remotes/" if is_remote else "refs/heads/")
             authordate = _datetime_at_utc(datetime.fromisoformat(b))
             committerdate = _datetime_at_utc(datetime.fromisoformat(c))
             if refname == target_branch or refname == f"origin/{target_branch}":

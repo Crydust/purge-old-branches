@@ -2,14 +2,13 @@
 
 import argparse
 import sys
-from typing import List, Optional
 
 from src.cleaner_logic import PurgeManager
 from src.csv_parser import CSVParser
 from src.git_wrapper import GitWrapper
 
 
-def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
+def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
     """
     Parse command-line arguments.
 
@@ -71,10 +70,17 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Path to the Git repository (default: current directory).",
     )
 
+    parser.add_argument(
+        "--age-threshold-days",
+        type=int,
+        default=90,
+        help="Minimum age in days for branch to be considered stale (default: 90).",
+    )
+
     return parser.parse_args(args)
 
 
-def main(args: Optional[List[str]] = None) -> int:
+def main(args: list[str] | None = None) -> int:
     """
     Main entry point for the CLI.
 
@@ -97,6 +103,19 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Parse prefixes from comma-separated list
         prefixes = [p.strip() for p in parsed_args.prefix.split(",")]
+        if not prefixes or "" in prefixes:
+            print(
+                "Error: --prefix must contain at least one prefix and the prefixes cannot be empty.",
+                file=sys.stderr,
+            )
+            return 1
+
+        if parsed_args.age_threshold_days < 1:
+            print(
+                "Error: --age-threshold-days must be a positive integer.",
+                file=sys.stderr,
+            )
+            return 1
 
         # Create the purge manager
         purge_manager = PurgeManager(
@@ -104,6 +123,7 @@ def main(args: Optional[List[str]] = None) -> int:
             csv_parser=csv_parser,
             patterns=prefixes,
             target_branch=parsed_args.target_branch,
+            age_threshold_days=parsed_args.age_threshold_days,
         )
 
         # Get branches to delete
@@ -123,13 +143,7 @@ def main(args: Optional[List[str]] = None) -> int:
             return 0
 
         # Delete branches
-        for branch in branches_to_delete:
-            try:
-                git_wrapper.delete_branch(branch, is_remote=parsed_args.remote)
-                print(f"Deleted: {branch}")
-            except RuntimeError as e:
-                print(f"Error deleting {branch}: {e}", file=sys.stderr)
-                return 1
+        git_wrapper.delete_branches(branches_to_delete, is_remote=parsed_args.remote)
 
         print(f"Successfully deleted {len(branches_to_delete)} branch(es).")
         return 0
@@ -137,11 +151,7 @@ def main(args: Optional[List[str]] = None) -> int:
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        return 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -2,17 +2,16 @@
 
 import csv
 from pathlib import Path
-from typing import Set
 
 
 class CSVParser:
     """Parse CSV files with configurable header names to extract ticket statuses."""
 
     def __init__(
-            self,
-            csv_path: str,
-            ticket_id_col: str = "ticket_id",
-            status_col: str = "status",
+        self,
+        csv_path: str,
+        ticket_id_col: str = "ticket_id",
+        status_col: str = "status",
     ):
         """
         Initialize the CSV parser.
@@ -26,9 +25,10 @@ class CSVParser:
         self.ticket_id_col = ticket_id_col
         self.status_col = status_col
 
-    def get_done_tickets(self) -> Set[str]:
+    def get_done_tickets(self) -> set[str]:
         """
         Read the CSV file and return a set of ticket IDs with 'Done' status.
+        Doesn't cache the results, so it will read the file every time this method is called.
 
         Returns:
             A set of ticket IDs where status is 'Done'.
@@ -41,10 +41,10 @@ class CSVParser:
         if not self.csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
 
-        done_tickets: Set[str] = set()
+        done_tickets: set[str] = set()
 
         with open(self.csv_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
+            reader = csv.DictReader(f, dialect=csv.excel)
 
             if reader.fieldnames is None:
                 raise ValueError("CSV file has no headers")
@@ -62,9 +62,6 @@ class CSVParser:
                 )
 
             for row in reader:
-                if row is None:
-                    continue
-
                 ticket_id = row.get(self.ticket_id_col, "").strip()
                 status = row.get(self.status_col, "").strip()
 

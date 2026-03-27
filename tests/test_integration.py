@@ -2,64 +2,58 @@
 
 import csv
 import subprocess
-import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from src.cli import main
-from src.csv_parser import CSVParser
-from src.git_wrapper import GitWrapper
 
 
 @pytest.fixture
-def temp_git_repo_with_branches():
+def temp_git_repo_with_branches(tmp_path: Path):
     """Create a temporary git repo with multiple branches."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
 
-        # Initialize git repo
-        subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@example.com"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test User"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
 
-        # Create initial commit on main
-        (repo_path / "README.md").write_text("initial")
-        subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "commit", "-m", "initial"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "branch", "-M", "main"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
+    # Create initial commit on main
+    (repo_path / "README.md").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "branch", "-M", "main"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
 
-        yield repo_path
+    yield repo_path
 
 
 @pytest.fixture
-def temp_csv_with_tickets():
+def temp_csv_with_tickets(tmp_path: Path):
     """Create a temporary CSV file with ticket statuses."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".csv", delete=False, newline=""
-    ) as f:
-        csv_path = f.name
+    csv_path = tmp_path / "tickets.csv"
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])
@@ -68,8 +62,7 @@ def temp_csv_with_tickets():
         writer.writerow({"ticket_id": "FEATURE-124", "status": "In Progress"})
         writer.writerow({"ticket_id": "BUG-001", "status": "Done"})
 
-    yield Path(csv_path)
-    Path(csv_path).unlink()
+    yield csv_path
 
 
 def test_integration_full_workflow(temp_git_repo_with_branches, temp_csv_with_tickets):
@@ -217,4 +210,3 @@ def test_integration_full_workflow(temp_git_repo_with_branches, temp_csv_with_ti
 
     # Verify BUG-001 still exists (not merged)
     assert "BUG-001-unmerged" in result.stdout
-

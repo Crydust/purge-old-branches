@@ -3,14 +3,14 @@ name = "purge-old-branches"
 version = "0.0.1"
 description = "A project to purge old branches"
 dependencies = []
+requires-python = ">=3.10"
+authors = [{ name = "Kristof Neirynck" }]
 
 [project.scripts]
 purge-old-branches = "src.cli:main"
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-]
+dev = ["pytest==9.0.2", "pytest-cov==7.0.0", "ruff==0.15.7", "build==1.4.0"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

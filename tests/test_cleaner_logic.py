@@ -1,7 +1,6 @@
 """Tests for the cleaner logic module."""
 
 import csv
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -10,7 +9,7 @@ import pytest
 
 from src.cleaner_logic import PurgeManager, TicketIDExtractor
 from src.csv_parser import CSVParser
-from src.git_wrapper import GitWrapper
+from src.git_wrapper import BranchInfo, GitWrapper
 
 
 class TestTicketIDExtractor:
@@ -70,12 +69,9 @@ class TestPurgeManager:
         return MagicMock(spec=GitWrapper)
 
     @pytest.fixture
-    def temp_csv_file(self):
+    def temp_csv_file(self, tmp_path: Path):
         """Create a temporary CSV file with test data."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False, newline=""
-        ) as f:
-            csv_path = f.name
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])
@@ -84,8 +80,7 @@ class TestPurgeManager:
             writer.writerow({"ticket_id": "FEATURE-124", "status": "In Progress"})
             writer.writerow({"ticket_id": "BUG-001", "status": "Done"})
 
-        yield Path(csv_path)
-        Path(csv_path).unlink()
+        yield csv_path
 
     @pytest.fixture
     def csv_parser(self, temp_csv_file):
@@ -95,8 +90,9 @@ class TestPurgeManager:
     def test_all_criteria_met(self, mock_git_wrapper, csv_parser):
         """Test that a branch is marked for deletion when all criteria are met."""
         old_date = datetime.now(timezone.utc) - timedelta(days=100)
-        mock_git_wrapper.get_merged_branches.return_value = ["FEATURE-123-desc"]
-        mock_git_wrapper.get_branch_commit_date.return_value = old_date
+        mock_git_wrapper.get_merged_branches.return_value = [
+            BranchInfo("FEATURE-123-desc", old_date, old_date)
+        ]
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -112,8 +108,9 @@ class TestPurgeManager:
     def test_branch_too_young(self, mock_git_wrapper, csv_parser):
         """Test that young branches are not deleted."""
         recent_date = datetime.now(timezone.utc) - timedelta(days=30)
-        mock_git_wrapper.get_merged_branches.return_value = ["FEATURE-123-desc"]
-        mock_git_wrapper.get_branch_commit_date.return_value = recent_date
+        mock_git_wrapper.get_merged_branches.return_value = [
+            BranchInfo("FEATURE-123-desc", recent_date, recent_date)
+        ]
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -128,8 +125,9 @@ class TestPurgeManager:
     def test_ticket_not_done(self, mock_git_wrapper, csv_parser):
         """Test that branches with 'In Progress' tickets are not deleted."""
         old_date = datetime.now(timezone.utc) - timedelta(days=100)
-        mock_git_wrapper.get_merged_branches.return_value = ["FEATURE-124-desc"]
-        mock_git_wrapper.get_branch_commit_date.return_value = old_date
+        mock_git_wrapper.get_merged_branches.return_value = [
+            BranchInfo("FEATURE-124-desc", old_date, old_date)
+        ]
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -144,8 +142,9 @@ class TestPurgeManager:
     def test_branch_not_matching_pattern(self, mock_git_wrapper, csv_parser):
         """Test that branches not matching patterns are ignored."""
         old_date = datetime.now(timezone.utc) - timedelta(days=100)
-        mock_git_wrapper.get_merged_branches.return_value = ["dev/my-branch"]
-        mock_git_wrapper.get_branch_commit_date.return_value = old_date
+        mock_git_wrapper.get_merged_branches.return_value = [
+            BranchInfo("dev/my-branch", old_date, old_date)
+        ]
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -163,20 +162,15 @@ class TestPurgeManager:
         young_date = datetime.now(timezone.utc) - timedelta(days=30)
 
         mock_git_wrapper.get_merged_branches.return_value = [
-            "FEATURE-123-desc",  # Old, Done -> DELETE
-            "FEATURE-124-desc",  # Old, In Progress -> KEEP
-            "BUG-001-fix",  # Old, Done -> DELETE
-            "dev/something",  # Old, but wrong pattern -> KEEP
+            BranchInfo("FEATURE-123-desc", old_date, old_date),  # Old, Done -> DELETE
+            BranchInfo(
+                "FEATURE-124-desc", young_date, young_date
+            ),  # Old, In Progress -> KEEP
+            BranchInfo("BUG-001-fix", old_date, old_date),  # Old, Done -> DELETE
+            BranchInfo(
+                "dev/something", old_date, old_date
+            ),  # Old, but wrong pattern -> KEEP
         ]
-
-        def get_commit_date_side_effect(branch, is_remote=False):
-            if branch == "FEATURE-124-desc":
-                return young_date
-            return old_date
-
-        mock_git_wrapper.get_branch_commit_date.side_effect = (
-            get_commit_date_side_effect
-        )
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -188,10 +182,11 @@ class TestPurgeManager:
         branches_to_delete = manager.get_branches_to_delete()
         assert set(branches_to_delete) == {"FEATURE-123-desc", "BUG-001-fix"}
 
-    def test_get_branch_commit_date_error_handling(self, mock_git_wrapper, csv_parser):
+    def test_get_merged_branches_error_handling(self, mock_git_wrapper, csv_parser):
         """Test that branches with date retrieval errors are skipped."""
-        mock_git_wrapper.get_merged_branches.return_value = ["FEATURE-123-desc"]
-        mock_git_wrapper.get_branch_commit_date.side_effect = RuntimeError("No commits")
+        mock_git_wrapper.get_merged_branches.side_effect = RuntimeError(
+            "No commits"
+        )
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -200,14 +195,15 @@ class TestPurgeManager:
             age_threshold_days=90,
         )
 
-        branches_to_delete = manager.get_branches_to_delete()
-        assert "FEATURE-123-desc" not in branches_to_delete
+        with pytest.raises(RuntimeError):
+            manager.get_branches_to_delete()
 
     def test_remote_branches(self, mock_git_wrapper, csv_parser):
         """Test with remote branches."""
         old_date = datetime.now(timezone.utc) - timedelta(days=100)
-        mock_git_wrapper.get_merged_branches.return_value = ["FEATURE-123-desc"]
-        mock_git_wrapper.get_branch_commit_date.return_value = old_date
+        mock_git_wrapper.get_merged_branches.return_value = [
+            BranchInfo("FEATURE-123-desc", old_date, old_date)
+        ]
 
         manager = PurgeManager(
             mock_git_wrapper,
@@ -220,8 +216,4 @@ class TestPurgeManager:
 
         # Verify that is_remote was passed to the git wrapper methods
         mock_git_wrapper.get_merged_branches.assert_called_with("main", is_remote=True)
-        mock_git_wrapper.get_branch_commit_date.assert_called_with(
-            "FEATURE-123-desc", is_remote=True
-        )
         assert "FEATURE-123-desc" in branches_to_delete
-

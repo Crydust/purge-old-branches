@@ -1,8 +1,6 @@
 """Tests for the CLI module."""
 
 import csv
-import tempfile
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -86,20 +84,16 @@ class TestMainFunction:
     """Tests for the main CLI function."""
 
     @pytest.fixture
-    def temp_csv_file(self):
+    def temp_csv_file(self, tmp_path: Path):
         """Create a temporary CSV file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False, newline=""
-        ) as f:
-            csv_path = f.name
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])
             writer.writeheader()
             writer.writerow({"ticket_id": "FEATURE-123", "status": "Done"})
 
-        yield Path(csv_path)
-        Path(csv_path).unlink()
+        yield csv_path
 
     def test_missing_csv_file(self):
         """Test that missing CSV file causes error."""
@@ -110,7 +104,7 @@ class TestMainFunction:
     @patch("src.cli.CSVParser")
     @patch("src.cli.PurgeManager")
     def test_no_branches_to_delete(
-        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
         """Test when no branches need to be deleted."""
         mock_git_instance = MagicMock()
@@ -123,25 +117,21 @@ class TestMainFunction:
         mock_purge_instance.get_branches_to_delete.return_value = []
         mock_purge_manager_class.return_value = mock_purge_instance
 
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
-            csv_path = f.name
-        Path(csv_path).unlink()
+        csv_path = tmp_path / "tickets.csv"
 
         # Create a fake CSV file
         with open(csv_path, "w") as f:
             f.write("ticket_id,status\n")
 
-        try:
-            result = main(["--csv-path", csv_path])
-            assert result == 0
-        finally:
-            Path(csv_path).unlink()
+        result = main(["--csv-path", str(csv_path)])
+        assert result == 0
+
 
     @patch("src.cli.GitWrapper")
     @patch("src.cli.CSVParser")
     @patch("src.cli.PurgeManager")
     def test_dry_run_mode(
-        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
         """Test dry-run mode doesn't delete branches."""
         mock_git_instance = MagicMock()
@@ -156,26 +146,22 @@ class TestMainFunction:
         ]
         mock_purge_manager_class.return_value = mock_purge_instance
 
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
-            csv_path = f.name
-        Path(csv_path).unlink()
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w") as f:
             f.write("ticket_id,status\n")
 
-        try:
-            result = main(["--csv-path", csv_path, "--dry-run"])
-            assert result == 0
-            # Verify delete_branch was NOT called
-            mock_git_instance.delete_branch.assert_not_called()
-        finally:
-            Path(csv_path).unlink()
+        result = main(["--csv-path", str(csv_path), "--dry-run"])
+        assert result == 0
+        # Verify delete_branches was NOT called
+        mock_git_instance.delete_branches.assert_not_called()
+
 
     @patch("src.cli.GitWrapper")
     @patch("src.cli.CSVParser")
     @patch("src.cli.PurgeManager")
     def test_successful_deletion(
-        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
         """Test successful deletion of branches."""
         mock_git_instance = MagicMock()
@@ -191,30 +177,25 @@ class TestMainFunction:
         ]
         mock_purge_manager_class.return_value = mock_purge_instance
 
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
-            csv_path = f.name
-        Path(csv_path).unlink()
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w") as f:
             f.write("ticket_id,status\n")
 
-        try:
-            result = main(["--csv-path", csv_path])
-            assert result == 0
-            # Verify delete_branch was called for each branch
-            assert mock_git_instance.delete_branch.call_count == 2
-        finally:
-            Path(csv_path).unlink()
+        result = main(["--csv-path", str(csv_path)])
+        assert result == 0
+        # Verify delete_branches was called for each branch
+        assert mock_git_instance.delete_branches.call_count == 1
 
     @patch("src.cli.GitWrapper")
     @patch("src.cli.CSVParser")
     @patch("src.cli.PurgeManager")
     def test_deletion_error_handling(
-        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
         """Test that deletion errors cause failure."""
         mock_git_instance = MagicMock()
-        mock_git_instance.delete_branch.side_effect = RuntimeError("Permission denied")
+        mock_git_instance.delete_branches.side_effect = RuntimeError("Permission denied")
         mock_git_class.return_value = mock_git_instance
 
         mock_csv_instance = MagicMock()
@@ -224,24 +205,19 @@ class TestMainFunction:
         mock_purge_instance.get_branches_to_delete.return_value = ["FEATURE-123-desc"]
         mock_purge_manager_class.return_value = mock_purge_instance
 
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
-            csv_path = f.name
-        Path(csv_path).unlink()
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w") as f:
             f.write("ticket_id,status\n")
 
-        try:
-            result = main(["--csv-path", csv_path])
-            assert result == 1
-        finally:
-            Path(csv_path).unlink()
+        result = main(["--csv-path", str(csv_path)])
+        assert result == 1
 
     @patch("src.cli.GitWrapper")
     @patch("src.cli.CSVParser")
     @patch("src.cli.PurgeManager")
     def test_custom_prefixes_passed_to_manager(
-        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
         """Test that custom prefixes are parsed and passed to PurgeManager."""
         mock_git_instance = MagicMock()
@@ -254,22 +230,51 @@ class TestMainFunction:
         mock_purge_instance.get_branches_to_delete.return_value = []
         mock_purge_manager_class.return_value = mock_purge_instance
 
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
-            csv_path = f.name
-        Path(csv_path).unlink()
+        csv_path = tmp_path / "tickets.csv"
 
         with open(csv_path, "w") as f:
             f.write("ticket_id,status\n")
 
-        try:
-            result = main(
-                ["--csv-path", csv_path, "--prefix", "JIRA-,TICKET-,EPIC-"]
-            )
-            assert result == 0
+        result = main(
+            ["--csv-path", str(csv_path), "--prefix", "JIRA-,TICKET-,EPIC-"]
+        )
+        assert result == 0
 
-            # Verify PurgeManager was created with correct patterns
-            call_kwargs = mock_purge_manager_class.call_args[1]
-            assert call_kwargs["patterns"] == ["JIRA-", "TICKET-", "EPIC-"]
-        finally:
-            Path(csv_path).unlink()
+        # Verify PurgeManager was created with correct patterns
+        call_kwargs = mock_purge_manager_class.call_args[1]
+        assert call_kwargs["patterns"] == ["JIRA-", "TICKET-", "EPIC-"]
+
+    @patch("src.cli.GitWrapper")
+    @patch("src.cli.CSVParser")
+    @patch("src.cli.PurgeManager")
+    def test_age_threshold_days_passed_to_manager(
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
+    ):
+        """Test that --age-threshold-days is forwarded to PurgeManager."""
+        mock_git_class.return_value = MagicMock()
+        mock_csv_parser_class.return_value = MagicMock()
+
+        mock_purge_instance = MagicMock()
+        mock_purge_instance.get_branches_to_delete.return_value = []
+        mock_purge_manager_class.return_value = mock_purge_instance
+
+        csv_path = tmp_path / "tickets.csv"
+        csv_path.write_text("ticket_id,status\n")
+
+        result = main(["--csv-path", str(csv_path), "--age-threshold-days", "180"])
+        assert result == 0
+
+        call_kwargs = mock_purge_manager_class.call_args[1]
+        assert call_kwargs["age_threshold_days"] == 180
+
+    @patch("src.cli.GitWrapper")
+    def test_empty_prefix_rejected(self, mock_git_class, tmp_path: Path):
+        """Test that a trailing comma in --prefix causes an error."""
+        mock_git_class.return_value = MagicMock()
+
+        csv_path = tmp_path / "tickets.csv"
+        csv_path.write_text("ticket_id,status\n")
+
+        result = main(["--csv-path", str(csv_path), "--prefix", "FEATURE-,"])
+        assert result == 1
 

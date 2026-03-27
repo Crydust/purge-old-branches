@@ -8,7 +8,7 @@
 ## Phase 2: Git Integration (Module: git_wrapper)
 * [x] **Task 2.1:** Implement `get_merged_branches(target_branch)` to list branches already merged into a specific base.
 * [x] **Task 2.2:** Implement `get_branch_commit_date(branch_name)` to retrieve the Unix timestamp or ISO date of the HEAD commit.
-* [x] **Task 2.3:** Implement `delete_branch(branch_name, is_remote)` to handle both `git branch -d` and `git push origin --delete`.
+* [x] **Task 2.3:** Implement `delete_branches(branch_names, is_remote)` to handle both `git branch -d` and `git push origin --delete` with a configurable batch size. We want to be able to delete multiple branches with a single git command.
 * [x] **Test:** Use a temporary git repo in tests to verify branch listing and deletion logic.
 
 ## Phase 3: Core Logic (Module: cleaner_logic)

@@ -1,69 +1,69 @@
 """Tests for the Git wrapper module."""
 
 import subprocess
-import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from src.git_wrapper import GitWrapper
+from src.git_wrapper import BranchInfo, GitWrapper
 
 
 @pytest.fixture
-def temp_git_repo():
+def temp_git_repo(tmp_path: Path):
     """Create a temporary Git repository for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
 
-        # Initialize git repo
-        subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@example.com"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test User"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
 
-        # Create initial commit on main branch
-        (repo_path / "README.md").write_text("test")
-        subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "commit", "-m", "initial"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "branch", "-M", "main"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-        )
+    # Create initial commit on main branch
+    (repo_path / "README.md").write_text("test")
+    subprocess.run(
+        ["git", "add", "."], cwd=repo_path, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "branch", "-M", "main"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
 
-        yield repo_path
+    yield repo_path
 
 
 @pytest.fixture
-def git_wrapper(temp_git_repo):
+def git_wrapper(temp_git_repo: Path):
     """Create a GitWrapper instance pointing to temp repo."""
     return GitWrapper(str(temp_git_repo))
 
 
-def test_git_wrapper_rejects_non_git_repo():
+def test_git_wrapper_rejects_non_git_repo(tmp_path: Path):
     """Test that GitWrapper fails fast on non-Git directories."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with pytest.raises(RuntimeError, match="not a valid Git repository"):
-            GitWrapper(tmpdir)
+    with pytest.raises(RuntimeError, match="not a valid Git repository"):
+        GitWrapper(tmp_path)
 
 
-def test_get_merged_branches_local(git_wrapper, temp_git_repo):
+def test_get_merged_branches_local(git_wrapper: GitWrapper, temp_git_repo: Path):
     """Test retrieving local branches merged into main."""
     # Create and merge a feature branch
     subprocess.run(
@@ -73,7 +73,9 @@ def test_get_merged_branches_local(git_wrapper, temp_git_repo):
         capture_output=True,
     )
     (temp_git_repo / "feature.txt").write_text("content")
-    subprocess.run(["git", "add", "."], cwd=temp_git_repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=temp_git_repo, check=True, capture_output=True
+    )
     subprocess.run(
         ["git", "commit", "-m", "feature"],
         cwd=temp_git_repo,
@@ -95,31 +97,36 @@ def test_get_merged_branches_local(git_wrapper, temp_git_repo):
         capture_output=True,
     )
 
-    merged = git_wrapper.get_merged_branches("main")
-    assert "feature-1" in merged
-
-
-def test_get_merged_branches_excludes_target(git_wrapper, temp_git_repo):
-    """Test that the target branch is excluded from merged branches."""
-    merged = git_wrapper.get_merged_branches("main")
-    assert "main" not in merged
-
-
-def test_get_branch_commit_date(git_wrapper, temp_git_repo):
-    """Test retrieving the commit date of a branch."""
-    commit_date = git_wrapper.get_branch_commit_date("main")
+    merged: list[BranchInfo] = git_wrapper.get_merged_branches("main")
+    matches = [b for b in merged if b.refname == "feature-1"]
+    assert len(matches) == 1
+    first_merged: BranchInfo = matches[0]
 
     # Should be a datetime in UTC
-    assert isinstance(commit_date, datetime)
-    assert commit_date.tzinfo is not None
-    assert commit_date.tzinfo == timezone.utc
+    committer_date = first_merged.committer_date
+    assert isinstance(committer_date, datetime)
+    assert committer_date.tzinfo is not None
+    assert committer_date.tzinfo == timezone.utc
+
+    author_date = first_merged.author_date
+    assert isinstance(author_date, datetime)
+    assert author_date.tzinfo is not None
+    assert author_date.tzinfo == timezone.utc
 
     # Should be recent (within last hour)
     now = datetime.now(timezone.utc)
-    assert (now - commit_date).total_seconds() < 3600
+    assert (now - committer_date).total_seconds() < 3600
+    assert (now - author_date).total_seconds() < 3600
 
 
-def test_get_branch_commit_date_old_branch(git_wrapper, temp_git_repo):
+def test_get_merged_branches_excludes_target(git_wrapper: GitWrapper):
+    """Test that the target branch is excluded from merged branches."""
+    merged = git_wrapper.get_merged_branches("main")
+    refnames = [b.refname for b in merged]
+    assert "main" not in refnames
+
+
+def test_get_merged_branches_old_branch(git_wrapper: GitWrapper, temp_git_repo: Path):
     """Test retrieving commit date from an old commit."""
     old_date = datetime(2020, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -131,7 +138,9 @@ def test_get_branch_commit_date_old_branch(git_wrapper, temp_git_repo):
         capture_output=True,
     )
     (temp_git_repo / "old.txt").write_text("old content")
-    subprocess.run(["git", "add", "."], cwd=temp_git_repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=temp_git_repo, check=True, capture_output=True
+    )
 
     # Set the commit date to 2020-01-01
     env = {
@@ -146,21 +155,38 @@ def test_get_branch_commit_date_old_branch(git_wrapper, temp_git_repo):
         env={**dict(subprocess.os.environ), **env},
     )
 
-    commit_date = git_wrapper.get_branch_commit_date("old-branch")
+    # Switch back to main and merge
+    subprocess.run(
+        ["git", "checkout", "main"],
+        cwd=temp_git_repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "merge", "old-branch"],
+        cwd=temp_git_repo,
+        check=True,
+        capture_output=True,
+    )
+
+    merged: list[BranchInfo] = git_wrapper.get_merged_branches("main")
+    matches = [b for b in merged if b.refname == "old-branch"]
+    assert len(matches) == 1
+    first_merged: BranchInfo = matches[0]
 
     # Should be in 2020
-    assert commit_date.year == 2020
-    assert commit_date.month == 1
-    assert commit_date.day == 1
+    committer_date = first_merged.committer_date
+    assert committer_date.year == 2020
+    assert committer_date.month == 1
+    assert committer_date.day == 1
+
+    author_date = first_merged.author_date
+    assert author_date.year == 2020
+    assert author_date.month == 1
+    assert author_date.day == 1
 
 
-def test_get_branch_commit_date_nonexistent_branch(git_wrapper):
-    """Test that getting commit date from nonexistent branch raises error."""
-    with pytest.raises(RuntimeError, match="Failed to get commit date"):
-        git_wrapper.get_branch_commit_date("nonexistent-branch")
-
-
-def test_delete_local_branch(git_wrapper, temp_git_repo):
+def test_delete_local_branch(git_wrapper: GitWrapper, temp_git_repo: Path):
     """Test deleting a local branch."""
     # Create a branch to delete
     subprocess.run(
@@ -188,7 +214,7 @@ def test_delete_local_branch(git_wrapper, temp_git_repo):
     assert "to-delete" in branches
 
     # Delete the branch
-    git_wrapper.delete_branch("to-delete", is_remote=False)
+    git_wrapper.delete_branches(["to-delete"], is_remote=False)
 
     # Verify it's deleted
     branches = subprocess.run(
@@ -202,19 +228,30 @@ def test_delete_local_branch(git_wrapper, temp_git_repo):
     assert "to-delete" not in branches
 
 
-def test_delete_local_branch_nonexistent(git_wrapper):
+def test_delete_local_branch_nonexistent(git_wrapper: GitWrapper):
     """Test that deleting nonexistent branch raises error."""
     with pytest.raises(RuntimeError, match="Failed to delete local branch"):
-        git_wrapper.delete_branch("nonexistent", is_remote=False)
+        git_wrapper.delete_branches(["nonexistent"], is_remote=False)
 
 
-def test_is_branch_older_than_90_days():
-    """Test helper to check if a branch is older than 90 days."""
-    now = datetime.now(timezone.utc)
-    old_date = now - timedelta(days=91)
-    recent_date = now - timedelta(days=45)
+def test_delete_branches_batches_local(git_wrapper: GitWrapper, monkeypatch):
+    """Test that local branch deletion is split into batch-sized git calls."""
+    calls: list[list[str]] = []
 
-    # Simulate the age check
-    assert (now - old_date).days >= 90
-    assert (now - recent_date).days < 90
+    def fake_run_git(args: list[str]) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(git_wrapper, "_run_git", fake_run_git)
+
+    git_wrapper.delete_branches(
+        ["feature-1", "feature-2", "feature-3"], is_remote=False, batch_size=2
+    )
+
+    assert calls == [
+        ["branch", "--delete", "feature-1", "feature-2"],
+        ["branch", "--delete", "feature-3"],
+    ]
+
+
 

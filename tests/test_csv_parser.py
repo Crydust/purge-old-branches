@@ -1,7 +1,6 @@
 """Tests for the CSV parser module."""
 
 import csv
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -10,17 +9,14 @@ from src.csv_parser import CSVParser
 
 
 @pytest.fixture
-def temp_csv_file():
+def temp_csv_file(tmp_path: Path):
     """Create a temporary CSV file for testing."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".csv", delete=False, newline=""
-    ) as f:
-        csv_path = f.name
-    yield Path(csv_path)
-    Path(csv_path).unlink()
+    csv_path = tmp_path / "test.csv"
+    csv_path.touch()
+    yield csv_path
 
 
-def test_csv_parser_reads_done_tickets(temp_csv_file):
+def test_csv_parser_reads_done_tickets(temp_csv_file: Path):
     """Test that parser correctly identifies 'Done' tickets."""
     with open(temp_csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])
@@ -35,7 +31,7 @@ def test_csv_parser_reads_done_tickets(temp_csv_file):
     assert done_tickets == {"JIRA-123", "JIRA-125"}
 
 
-def test_csv_parser_with_custom_headers(temp_csv_file):
+def test_csv_parser_with_custom_headers(temp_csv_file: Path):
     """Test that parser works with custom header names."""
     with open(temp_csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id", "state"])
@@ -49,7 +45,7 @@ def test_csv_parser_with_custom_headers(temp_csv_file):
     assert done_tickets == {"BUG-001"}
 
 
-def test_csv_parser_handles_empty_rows(temp_csv_file):
+def test_csv_parser_handles_empty_rows(temp_csv_file: Path):
     """Test that parser handles empty rows gracefully."""
     with open(temp_csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])
@@ -71,7 +67,7 @@ def test_csv_parser_missing_file():
         parser.get_done_tickets()
 
 
-def test_csv_parser_missing_column(temp_csv_file):
+def test_csv_parser_missing_column(temp_csv_file: Path):
     """Test that parser fails when required column is missing."""
     with open(temp_csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["ticket_id"])
@@ -83,7 +79,7 @@ def test_csv_parser_missing_column(temp_csv_file):
         parser.get_done_tickets()
 
 
-def test_csv_parser_empty_file(temp_csv_file):
+def test_csv_parser_empty_file(temp_csv_file: Path):
     """Test that parser handles empty CSV file."""
     temp_csv_file.touch()
 
@@ -92,7 +88,7 @@ def test_csv_parser_empty_file(temp_csv_file):
         parser.get_done_tickets()
 
 
-def test_csv_parser_whitespace_handling(temp_csv_file):
+def test_csv_parser_whitespace_handling(temp_csv_file: Path):
     """Test that parser handles whitespace in ticket IDs and statuses."""
     with open(temp_csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["ticket_id", "status"])

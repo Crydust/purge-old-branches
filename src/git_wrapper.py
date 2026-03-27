@@ -142,9 +142,12 @@ class GitWrapper:
         for i in range(0, len(branch_names), batch_size):
             batch = branch_names[i : i + batch_size]
             if is_remote:
-                # Use git push origin --delete for remote branches
+                # Strip 'origin/' prefix — git push origin --delete expects bare names
+                bare_names = [
+                    b.removeprefix("origin/") for b in batch
+                ]
                 try:
-                    self._run_git(["push", "origin", "--delete"] + batch)
+                    self._run_git(["push", "origin", "--delete"] + bare_names)
                 except subprocess.CalledProcessError as e:
                     raise RuntimeError(
                         f"Failed to delete remote branches '{batch}': {e.stderr}"

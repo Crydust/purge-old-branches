@@ -254,4 +254,86 @@ def test_delete_branches_batches_local(git_wrapper: GitWrapper, monkeypatch):
     ]
 
 
+def test_delete_branches_remote(git_wrapper: GitWrapper, monkeypatch):
+    """Test that remote branch deletion uses 'git push origin --delete' in batches."""
+    calls: list[list[str]] = []
+
+    def fake_run_git(args: list[str]) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(git_wrapper, "_run_git", fake_run_git)
+
+    git_wrapper.delete_branches(
+        ["origin/feature-1", "origin/feature-2", "origin/feature-3"],
+        is_remote=True,
+        batch_size=2,
+    )
+
+    assert calls == [
+        ["push", "origin", "--delete", "feature-1", "feature-2"],
+        ["push", "origin", "--delete", "feature-3"],
+    ]
+
+
+def _run(args: list[str], cwd: Path, **kwargs) -> subprocess.CompletedProcess:
+    return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True, **kwargs)
+
+
+@pytest.fixture
+def remote_and_clone(tmp_path: Path):
+    """Create a bare 'server' repo and a clone with pushed feature branches."""
+    bare = tmp_path / "server.git"
+    bare.mkdir()
+    _run(["git", "init", "--bare"], cwd=bare)
+
+    clone = tmp_path / "clone"
+    _run(["git", "clone", str(bare), str(clone)], cwd=tmp_path)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=clone)
+    _run(["git", "config", "user.name", "Test User"], cwd=clone)
+
+    # Initial commit on main
+    (clone / "README.md").write_text("init")
+    _run(["git", "add", "."], cwd=clone)
+    _run(["git", "commit", "-m", "initial"], cwd=clone)
+    _run(["git", "branch", "-M", "main"], cwd=clone)
+    _run(["git", "push", "-u", "origin", "main"], cwd=clone)
+
+    # Create two feature branches, merge them into main, and push everything
+    for branch in ["feature-1", "feature-2"]:
+        _run(["git", "checkout", "-b", branch], cwd=clone)
+        (clone / f"{branch}.txt").write_text(branch)
+        _run(["git", "add", "."], cwd=clone)
+        _run(["git", "commit", "-m", branch], cwd=clone)
+        _run(["git", "push", "-u", "origin", branch], cwd=clone)
+        _run(["git", "checkout", "main"], cwd=clone)
+        _run(["git", "merge", branch], cwd=clone)
+
+    _run(["git", "push"], cwd=clone)
+
+    yield bare, clone
+
+
+def test_delete_remote_branches_real(remote_and_clone):
+    """Test deleting remote branches against a real bare repo."""
+    bare, clone = remote_and_clone
+
+    # Confirm both branches exist on the remote
+    remote_refs = _run(["git", "branch", "-r"], cwd=clone).stdout
+    assert "origin/feature-1" in remote_refs
+    assert "origin/feature-2" in remote_refs
+
+    wrapper = GitWrapper(str(clone))
+
+    # Delete only feature-1 remotely (using origin/ prefix as get_merged_branches returns)
+    wrapper.delete_branches(["origin/feature-1"], is_remote=True)
+
+    # Fetch to update remote tracking refs
+    _run(["git", "fetch", "--prune"], cwd=clone)
+    remote_refs = _run(["git", "branch", "-r"], cwd=clone).stdout
+
+    assert "origin/feature-1" not in remote_refs
+    assert "origin/feature-2" in remote_refs
+
+
 

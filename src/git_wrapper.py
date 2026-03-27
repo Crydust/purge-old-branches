@@ -12,6 +12,7 @@ class BranchInfo:
     author_date: datetime
     committer_date: datetime
 
+
 def _datetime_at_utc(dt: datetime) -> datetime:
     if dt.tzinfo is not None:
         return dt.astimezone(timezone.utc)
@@ -64,6 +65,12 @@ class GitWrapper:
         )
         return result.stdout.strip()
 
+    def fetch(self) -> None:
+        try:
+            self._run_git(["fetch"])
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to fetch: {e.stderr}")
+
     def get_merged_branches(
         self, target_branch: str, is_remote: bool = False
     ) -> list[BranchInfo]:
@@ -77,6 +84,9 @@ class GitWrapper:
         Returns:
             A list of BranchInfo objects representing branches merged into the target branch.
         """
+
+        if is_remote:
+            self.fetch()
 
         try:
             args = [

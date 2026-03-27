@@ -9,3 +9,6 @@ build/
 .coverage
 .pytest_cache/
 .ruff_cache/
+
+jira-export.csv
+PRIVATE-README.md

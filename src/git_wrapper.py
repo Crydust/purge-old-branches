@@ -14,10 +14,11 @@ class BranchInfo:
 
 
 def _datetime_at_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc)
-    else:
-        return dt.replace(tzinfo=timezone.utc)
+    return (
+        dt.astimezone(timezone.utc)
+        if dt.tzinfo is not None
+        else dt.replace(tzinfo=timezone.utc)
+    )
 
 
 class GitWrapper:
@@ -105,15 +106,22 @@ class GitWrapper:
                 f"Failed to get merged branches for '{target_branch}': {e.stderr}"
             )
 
+        skip = {target_branch, f"origin/{target_branch}"}
         branches = []
         for line in output.splitlines():
-            a, b, c = line.split(" ?sep? ", maxsplit=2)
-            refname = a.removeprefix("refs/remotes/" if is_remote else "refs/heads/")
-            authordate = _datetime_at_utc(datetime.fromisoformat(b))
-            committerdate = _datetime_at_utc(datetime.fromisoformat(c))
-            if refname == target_branch or refname == f"origin/{target_branch}":
+            raw_ref, raw_adate, raw_cdate = line.split(" ?sep? ", maxsplit=2)
+            refname = raw_ref.removeprefix(
+                "refs/remotes/" if is_remote else "refs/heads/"
+            )
+            if refname in skip:
                 continue
-            branches.append(BranchInfo(refname, authordate, committerdate))
+            branches.append(
+                BranchInfo(
+                    refname,
+                    _datetime_at_utc(datetime.fromisoformat(raw_adate)),
+                    _datetime_at_utc(datetime.fromisoformat(raw_cdate)),
+                )
+            )
 
         return branches
 
@@ -137,20 +145,16 @@ class GitWrapper:
             batch = branch_names[i : i + batch_size]
             if is_remote:
                 # Strip 'origin/' prefix — git push origin --delete expects bare names
-                bare_names = [
-                    b.removeprefix("origin/") for b in batch
-                ]
-                try:
-                    self._run_git(["push", "origin", "--delete"] + bare_names)
-                except subprocess.CalledProcessError as e:
-                    raise RuntimeError(
-                        f"Failed to delete remote branches '{batch}': {e.stderr}"
-                    )
+                bare_names = [b.removeprefix("origin/") for b in batch]
+                args = ["push", "origin", "--delete"] + bare_names
             else:
                 # Use git branch --delete for local branches
-                try:
-                    self._run_git(["branch", "--delete"] + batch)
-                except subprocess.CalledProcessError as e:
-                    raise RuntimeError(
-                        f"Failed to delete local branches '{batch}': {e.stderr}"
-                    )
+                args = ["branch", "--delete"] + batch
+
+            try:
+                self._run_git(args)
+            except subprocess.CalledProcessError as e:
+                kind = "remote" if is_remote else "local"
+                raise RuntimeError(
+                    f"Failed to delete {kind} branches '{batch}': {e.stderr}"
+                )

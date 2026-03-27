@@ -1,5 +1,6 @@
 """Tests for the Git wrapper module."""
 
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,7 +61,7 @@ def git_wrapper(temp_git_repo: Path):
 def test_git_wrapper_rejects_non_git_repo(tmp_path: Path):
     """Test that GitWrapper fails fast on non-Git directories."""
     with pytest.raises(RuntimeError, match="not a valid Git repository"):
-        GitWrapper(tmp_path)
+        GitWrapper(str(tmp_path))
 
 
 def test_get_merged_branches_local(git_wrapper: GitWrapper, temp_git_repo: Path):
@@ -152,7 +153,7 @@ def test_get_merged_branches_old_branch(git_wrapper: GitWrapper, temp_git_repo: 
         cwd=temp_git_repo,
         check=True,
         capture_output=True,
-        env={**dict(subprocess.os.environ), **env},
+        env=os.environ | env,
     )
 
     # Switch back to main and merge

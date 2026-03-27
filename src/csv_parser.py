@@ -62,10 +62,9 @@ class CSVParser:
                 )
 
             for row in reader:
-                ticket_id = row.get(self.ticket_id_col, "").strip()
-                status = row.get(self.status_col, "").strip()
+                ticket_id = row[self.ticket_id_col].strip()
+                status = row[self.status_col].strip()
 
-                # Only add non-empty ticket IDs with 'Done' status
                 if ticket_id and status == "Done":
                     done_tickets.add(ticket_id)
 

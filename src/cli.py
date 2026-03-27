@@ -3,7 +3,6 @@
 import argparse
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from functools import reduce
 
 from src.cleaner_logic import PurgeManager
 from src.csv_parser import CSVParser
@@ -139,16 +138,13 @@ def main(args: list[str] | None = None) -> int:
         ]
 
         # Query each repository in parallel (git operations are slow)
-        with ThreadPoolExecutor(max_workers=len(managers)) as executor:
-            branch_sets = list(
-                executor.map(
-                    lambda m: set(m.get_branches_to_delete(is_remote=parsed_args.remote)),
-                    managers,
-                )
-            )
+        def get_eligible(m: PurgeManager) -> set[str]:
+            return set(m.get_branches_to_delete(is_remote=parsed_args.remote))
 
-        # Only branches eligible in ALL repositories may be deleted
-        branches_to_delete = sorted(reduce(set.intersection, branch_sets))
+        with ThreadPoolExecutor(max_workers=len(managers)) as executor:
+            branch_sets = list(executor.map(get_eligible, managers))
+
+        branches_to_delete = sorted(set.intersection(*branch_sets))
 
         if not branches_to_delete:
             print("No branches to delete.")
@@ -162,13 +158,11 @@ def main(args: list[str] | None = None) -> int:
             return 0
 
         # Delete the common branches from every repository in parallel
+        def delete_from(m: PurgeManager) -> None:
+            m.git_wrapper.delete_branches(branches_to_delete, is_remote=parsed_args.remote)
+
         with ThreadPoolExecutor(max_workers=len(managers)) as executor:
-            list(executor.map(
-                lambda m: m.git_wrapper.delete_branches(
-                    branches_to_delete, is_remote=parsed_args.remote
-                ),
-                managers,
-            ))
+            list(executor.map(delete_from, managers))
 
         print(f"Successfully deleted {len(branches_to_delete)} branch(es).")
         return 0

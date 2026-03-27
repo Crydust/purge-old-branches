@@ -1,7 +1,6 @@
 """Core logic for determining which branches should be purged."""
 
 import re
-from re import RegexFlag
 from datetime import datetime, timezone
 
 from src.csv_parser import CSVParser
@@ -24,7 +23,7 @@ class TicketIDExtractor:
         self.compiled_patterns = [
             re.compile(
                 r"(?:origin/)?(" + re.escape(p) + r"\d{1,10})\b.*",
-                0 if case_sensitive else RegexFlag.IGNORECASE,
+                0 if case_sensitive else re.IGNORECASE,
             )
             for p in patterns
         ]

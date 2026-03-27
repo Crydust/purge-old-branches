@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.cleaner_logic import PurgeManager, TicketIDExtractor
-from src.csv_parser import CSVParser
-from src.git_wrapper import BranchInfo, GitWrapper
+from purge_old_branches.cleaner_logic import PurgeManager, TicketIDExtractor
+from purge_old_branches.csv_parser import CSVParser
+from purge_old_branches.git_wrapper import BranchInfo, GitWrapper
 
 
 class TestTicketIDExtractor:

@@ -3,8 +3,8 @@
 import re
 from datetime import datetime, timezone
 
-from src.csv_parser import CSVParser
-from src.git_wrapper import BranchInfo, GitWrapper
+from purge_old_branches.csv_parser import CSVParser
+from purge_old_branches.git_wrapper import BranchInfo, GitWrapper
 
 
 class TicketIDExtractor:

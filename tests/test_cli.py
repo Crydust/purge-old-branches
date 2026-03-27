@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.cli import main, parse_arguments
+from purge_old_branches.cli import main, parse_arguments
 
 
 class TestParseArguments:
@@ -100,9 +100,9 @@ class TestMainFunction:
         result = main(["--csv-path", "/nonexistent/file.csv"])
         assert result == 1
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_no_branches_to_delete(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -127,9 +127,9 @@ class TestMainFunction:
         assert result == 0
 
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_dry_run_mode(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -157,9 +157,9 @@ class TestMainFunction:
         mock_git_instance.delete_branches.assert_not_called()
 
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_successful_deletion(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -188,9 +188,9 @@ class TestMainFunction:
         # Verify delete_branches was called for each branch
         assert mock_git_instance.delete_branches.call_count == 1
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_deletion_error_handling(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -215,9 +215,9 @@ class TestMainFunction:
         result = main(["--csv-path", str(csv_path)])
         assert result == 1
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_custom_prefixes_passed_to_manager(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -246,9 +246,9 @@ class TestMainFunction:
         call_kwargs = mock_purge_manager_class.call_args[1]
         assert call_kwargs["patterns"] == ["JIRA-", "TICKET-", "EPIC-"]
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_age_threshold_days_passed_to_manager(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):
@@ -269,7 +269,7 @@ class TestMainFunction:
         call_kwargs = mock_purge_manager_class.call_args[1]
         assert call_kwargs["age_threshold_days"] == 180
 
-    @patch("src.cli.GitWrapper")
+    @patch("purge_old_branches.cli.GitWrapper")
     def test_empty_prefix_rejected(self, mock_git_class, tmp_path: Path):
         """Test that a trailing comma in --prefix causes an error."""
         mock_git_class.return_value = MagicMock()
@@ -280,9 +280,9 @@ class TestMainFunction:
         result = main(["--csv-path", str(csv_path), "--prefix", "FEATURE-,"])
         assert result == 1
 
-    @patch("src.cli.GitWrapper")
-    @patch("src.cli.CSVParser")
-    @patch("src.cli.PurgeManager")
+    @patch("purge_old_branches.cli.GitWrapper")
+    @patch("purge_old_branches.cli.CSVParser")
+    @patch("purge_old_branches.cli.PurgeManager")
     def test_multi_repo_only_deletes_intersection(
         self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
     ):

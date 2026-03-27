@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.csv_parser import CSVParser
+from purge_old_branches.csv_parser import CSVParser
 
 
 @pytest.fixture

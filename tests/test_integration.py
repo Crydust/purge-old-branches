@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.cli import main
+from purge_old_branches.cli import main
 
 
 @pytest.fixture

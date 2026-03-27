@@ -4,9 +4,9 @@ import argparse
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-from src.cleaner_logic import PurgeManager
-from src.csv_parser import CSVParser
-from src.git_wrapper import GitWrapper
+from purge_old_branches.cleaner_logic import PurgeManager
+from purge_old_branches.csv_parser import CSVParser
+from purge_old_branches.git_wrapper import GitWrapper
 
 
 def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:

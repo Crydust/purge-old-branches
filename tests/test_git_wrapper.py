@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.git_wrapper import BranchInfo, GitWrapper
+from purge_old_branches.git_wrapper import BranchInfo, GitWrapper
 
 
 @pytest.fixture

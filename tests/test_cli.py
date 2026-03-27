@@ -31,7 +31,7 @@ class TestParseArguments:
         assert args.prefix == "FEATURE-,BUG-"
         assert args.remote is False
         assert args.dry_run is False
-        assert args.repo == "."
+        assert args.repo is None
 
     def test_custom_csv_columns(self):
         """Test setting custom CSV column names."""
@@ -77,7 +77,7 @@ class TestParseArguments:
         args = parse_arguments(
             ["--csv-path", "file.csv", "--repo", "/path/to/repo"]
         )
-        assert args.repo == "/path/to/repo"
+        assert args.repo == ["/path/to/repo"]
 
 
 class TestMainFunction:
@@ -175,6 +175,7 @@ class TestMainFunction:
             "FEATURE-123-desc",
             "BUG-001-fix",
         ]
+        mock_purge_instance.git_wrapper = mock_git_instance
         mock_purge_manager_class.return_value = mock_purge_instance
 
         csv_path = tmp_path / "tickets.csv"
@@ -203,6 +204,7 @@ class TestMainFunction:
 
         mock_purge_instance = MagicMock()
         mock_purge_instance.get_branches_to_delete.return_value = ["FEATURE-123-desc"]
+        mock_purge_instance.git_wrapper = mock_git_instance
         mock_purge_manager_class.return_value = mock_purge_instance
 
         csv_path = tmp_path / "tickets.csv"
@@ -277,4 +279,53 @@ class TestMainFunction:
 
         result = main(["--csv-path", str(csv_path), "--prefix", "FEATURE-,"])
         assert result == 1
+
+    @patch("src.cli.GitWrapper")
+    @patch("src.cli.CSVParser")
+    @patch("src.cli.PurgeManager")
+    def test_multi_repo_only_deletes_intersection(
+        self, mock_purge_manager_class, mock_csv_parser_class, mock_git_class, tmp_path: Path
+    ):
+        """Test that with two repos, only branches eligible in both are deleted."""
+        mock_csv_parser_class.return_value = MagicMock()
+
+        # Two separate GitWrapper mocks, one per repo
+        git_mock_a = MagicMock()
+        git_mock_b = MagicMock()
+        mock_git_class.side_effect = [git_mock_a, git_mock_b]
+
+        # Two PurgeManager mocks, one per repo
+        manager_a = MagicMock()
+        manager_a.get_branches_to_delete.return_value = [
+            "FEATURE-100-shared",
+            "FEATURE-200-only-in-a",
+        ]
+        manager_a.git_wrapper = git_mock_a
+
+        manager_b = MagicMock()
+        manager_b.get_branches_to_delete.return_value = [
+            "FEATURE-100-shared",
+            "FEATURE-300-only-in-b",
+        ]
+        manager_b.git_wrapper = git_mock_b
+
+        mock_purge_manager_class.side_effect = [manager_a, manager_b]
+
+        csv_path = tmp_path / "tickets.csv"
+        csv_path.write_text("ticket_id,status\n")
+
+        result = main([
+            "--csv-path", str(csv_path),
+            "--repo", "/repo/a",
+            "--repo", "/repo/b",
+        ])
+        assert result == 0
+
+        # Only the shared branch should be deleted in both repos
+        git_mock_a.delete_branches.assert_called_once()
+        git_mock_b.delete_branches.assert_called_once()
+        deleted_a = git_mock_a.delete_branches.call_args[0][0]
+        deleted_b = git_mock_b.delete_branches.call_args[0][0]
+        assert deleted_a == ["FEATURE-100-shared"]
+        assert deleted_b == ["FEATURE-100-shared"]
 

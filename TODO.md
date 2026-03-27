@@ -30,3 +30,9 @@
 * [x] **Task 5.2:** Create integration test across all modules.
 * [x] **Task 5.3:** Set up console script entry point in pyproject.toml.
 * [x] **Task 5.4:** All 47 tests passing.
+
+## Phase 6: Multi-Repository Support
+* [x] **Task 6.1:** `--repo` argument supports comma-separated values and is repeatable.
+* [x] **Task 6.2:** One `PurgeManager` per repository, queried in parallel.
+* [x] **Task 6.3:** Only branches eligible in ALL repositories are deleted (intersection).
+* [x] **Task 6.4:** Update tests for multi-repo scenarios.

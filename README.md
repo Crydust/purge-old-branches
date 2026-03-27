@@ -8,6 +8,7 @@ A branch is considered "stale" and eligible for deletion if **all** the followin
 2. **Age:** The `HEAD` commit of the branch is older than 90 days.
 3. **Merged:** The branch has been merged into the "target" branch (e.g., `main` or `RELEASE-12345`).
 4. **Naming Convention:** The branch name starts with a configurable prefix (e.g., `BUG-`, `FEATURE-`).
+5. **Multi-Repository:** When multiple repositories are specified via `--repo`, a branch is only deleted if it is eligible in **every** repository.
 
 ## Architecture
 The application is split into testable modules:

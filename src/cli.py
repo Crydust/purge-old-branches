@@ -2,6 +2,8 @@
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from functools import reduce
 
 from src.cleaner_logic import PurgeManager
 from src.csv_parser import CSVParser
@@ -66,8 +68,8 @@ def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
 
     parser.add_argument(
         "--repo",
-        default=".",
-        help="Path to the Git repository (default: current directory).",
+        action="append",
+        help="Path to a Git repository. Repeatable and supports comma-separated values (default: current directory).",
     )
 
     parser.add_argument(
@@ -93,8 +95,15 @@ def main(args: list[str] | None = None) -> int:
     try:
         parsed_args = parse_arguments(args)
 
-        # Initialize components
-        git_wrapper = GitWrapper(parsed_args.repo)
+        # Flatten --repo values (each may be comma-separated) and default to "."
+        raw_repos = parsed_args.repo or ["."]
+        repo_paths = [
+            p.strip()
+            for arg in raw_repos
+            for p in arg.split(",")
+            if p.strip()
+        ]
+
         csv_parser = CSVParser(
             parsed_args.csv_path,
             ticket_id_col=parsed_args.csv_ticket_col,
@@ -117,19 +126,29 @@ def main(args: list[str] | None = None) -> int:
             )
             return 1
 
-        # Create the purge manager
-        purge_manager = PurgeManager(
-            git_wrapper=git_wrapper,
-            csv_parser=csv_parser,
-            patterns=prefixes,
-            target_branch=parsed_args.target_branch,
-            age_threshold_days=parsed_args.age_threshold_days,
-        )
+        # Create one PurgeManager per repository
+        managers = [
+            PurgeManager(
+                git_wrapper=GitWrapper(repo),
+                csv_parser=csv_parser,
+                patterns=prefixes,
+                target_branch=parsed_args.target_branch,
+                age_threshold_days=parsed_args.age_threshold_days,
+            )
+            for repo in repo_paths
+        ]
 
-        # Get branches to delete
-        branches_to_delete = purge_manager.get_branches_to_delete(
-            is_remote=parsed_args.remote
-        )
+        # Query each repository in parallel (git operations are slow)
+        with ThreadPoolExecutor(max_workers=len(managers)) as executor:
+            branch_sets = list(
+                executor.map(
+                    lambda m: set(m.get_branches_to_delete(is_remote=parsed_args.remote)),
+                    managers,
+                )
+            )
+
+        # Only branches eligible in ALL repositories may be deleted
+        branches_to_delete = sorted(reduce(set.intersection, branch_sets))
 
         if not branches_to_delete:
             print("No branches to delete.")
@@ -142,8 +161,14 @@ def main(args: list[str] | None = None) -> int:
                 print(f"[DRY-RUN] {branch}")
             return 0
 
-        # Delete branches
-        git_wrapper.delete_branches(branches_to_delete, is_remote=parsed_args.remote)
+        # Delete the common branches from every repository in parallel
+        with ThreadPoolExecutor(max_workers=len(managers)) as executor:
+            list(executor.map(
+                lambda m: m.git_wrapper.delete_branches(
+                    branches_to_delete, is_remote=parsed_args.remote
+                ),
+                managers,
+            ))
 
         print(f"Successfully deleted {len(branches_to_delete)} branch(es).")
         return 0
